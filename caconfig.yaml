@@ -1,0 +1,10 @@
+---
+caname: ca.org1.example.com
+url: https://ca.org1.example.com:7054
+skiptlsvalidation: true
+mspid: Org1MSP
+crypto:
+  family: ecdsa
+  algorithm: P256-SHA256
+  hash: SHA2-256
+filepath: /tem/msp
