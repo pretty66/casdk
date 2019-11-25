@@ -1,6 +1,7 @@
 package casdk
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
 )
@@ -98,11 +99,10 @@ func TestFabricCAClient_GetIdentity(t *testing.T) {
 	fmt.Println(res)
 }
 
-
 func TestFabricCAClient_Revoke(t *testing.T) {
 	idn := initIdentity()
 	req := CARevocationRequest{
-		EnrollmentId:"ca4",
+		EnrollmentId: "ca4",
 	}
 	res, err := client.Revoke(idn, &req)
 	if err != nil {
@@ -113,6 +113,13 @@ func TestFabricCAClient_Revoke(t *testing.T) {
 
 func TestFabricCAClient_NewKey(t *testing.T) {
 	pri, pub, err := client.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(pri))
+	fmt.Println(string(pub))
+
+	pri, pub, err = client.NewKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,4 +149,37 @@ kF5euyxOHGJjxPyYXRm+5LPMzKI/vEOcE3xDQhlv9OPNG7sMT9Tfn96U
 	fmt.Println("--------- cert -------- \n", string(cert))
 	fmt.Println("--------- privateKey -------- \n", string(privKey))
 	fmt.Println("--------- publicKey -------- \n", string(pubKey))
+}
+
+func TestECCryptSuite_Sign(t *testing.T) {
+	pri := []byte(`-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgc11Utvqv9UlT8MSN
+/UIS5amvpqIA+gTBib4Z0+/DThyhRANCAAQakkETGas3qLAUjCQH4IzILXzeYECA
+kF5euyxOHGJjxPyYXRm+5LPMzKI/vEOcE3xDQhlv9OPNG7sMT9Tfn96U
+-----END PRIVATE KEY-----`)
+	prikey, err := ParsePemKey(pri)
+	checkErr(t, err)
+	res, err := client.Crypto.Sign([]byte("asdasd"), prikey)
+	checkErr(t, err)
+	fmt.Println(hex.EncodeToString(res))
+}
+
+func TestECCryptSuite_Verify(t *testing.T) {
+	pri := []byte(`-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgc11Utvqv9UlT8MSN
+/UIS5amvpqIA+gTBib4Z0+/DThyhRANCAAQakkETGas3qLAUjCQH4IzILXzeYECA
+kF5euyxOHGJjxPyYXRm+5LPMzKI/vEOcE3xDQhlv9OPNG7sMT9Tfn96U
+-----END PRIVATE KEY-----`)
+	prikey, err := ParsePemKey(pri)
+	checkErr(t, err)
+
+	sign := "304402207a3268555083b2dfcbea7ddd13425bf80c878f1ee913a847ade0933bc14ce0c7022015143aff86eadd0859a71704ed625620934ebdd04e589b16fbf3880776ac3071"
+	signByte, err := hex.DecodeString(sign)
+	checkErr(t, err)
+
+	//hash := client.Crypto.Hash([]byte("123123"))
+
+	res, err := client.Crypto.Verify(&prikey.PublicKey, signByte, []byte("asdasd"))
+	checkErr(t, err)
+	fmt.Println(res)
 }

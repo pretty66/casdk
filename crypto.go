@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"golang.org/x/crypto/sha3"
 	"hash"
@@ -36,6 +37,8 @@ type CryptoSuite interface {
 	GetPemPrivateKey() ([]byte, error)
 	// get publicKey byte
 	GetPemPublicKey() ([]byte, error)
+	// verify by public
+	Verify(private interface{}, signature, digest []byte) (valid bool, err error)
 }
 
 var (
@@ -210,4 +213,53 @@ func NewECCryptoSuiteFromConfig(config CryptoConfig) (CryptoSuite, error) {
 		return nil, ErrInvalidHash
 	}
 	return suite, nil
+}
+
+// 私钥 签名 待签名的数据
+func (c *ECCryptSuite) Verify(public interface{}, signature, digest []byte) (valid bool, err error) {
+	k, ok := public.(*ecdsa.PublicKey)
+	if !ok {
+		err = fmt.Errorf("public key error")
+		return
+	}
+	r, s, err := c.UnmarshalECDSASignature(signature)
+	if err != nil {
+		return false, fmt.Errorf("Failed unmashalling signature [%s]", err)
+	}
+
+	lowS, err := IsLowS(k, s)
+	if err != nil {
+		return false, err
+	}
+
+	if !lowS {
+		return false, fmt.Errorf("Invalid S. Must be smaller than half the order [%s].", s)
+	}
+	hashByte := c.Hash(digest)
+	return ecdsa.Verify(k, hashByte, r, s), nil
+}
+
+func (c *ECCryptSuite) UnmarshalECDSASignature(raw []byte) (*big.Int, *big.Int, error) {
+	// Unmarshal
+	sig := new(eCDSASignature)
+	_, err := asn1.Unmarshal(raw, sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed unmashalling signature [%s]", err)
+	}
+	// Validate sig
+	if sig.R == nil {
+		return nil, nil, errors.New("invalid signature, R must be different from nil")
+	}
+	if sig.S == nil {
+		return nil, nil, errors.New("invalid signature, S must be different from nil")
+	}
+
+	if sig.R.Sign() != 1 {
+		return nil, nil, errors.New("invalid signature, R must be larger than zero")
+	}
+	if sig.S.Sign() != 1 {
+		return nil, nil, errors.New("invalid signature, S must be larger than zero")
+	}
+
+	return sig.R, sig.S, nil
 }
