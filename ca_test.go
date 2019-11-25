@@ -57,8 +57,8 @@ func TestFabricCAClient_GetCaInfo(t *testing.T) {
 
 func TestFabricCAClient_Enroll(t *testing.T) {
 	enrollReq := CaEnrollmentRequest{
-		EnrollmentId: "ca4",
-		Secret:       "ca4",
+		EnrollmentId: "test1",
+		Secret:       "test1",
 	}
 	idn, err := client.Enroll(enrollReq)
 	checkErr(t, err)
@@ -109,4 +109,37 @@ func TestFabricCAClient_Revoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println(res)
+}
+
+func TestFabricCAClient_NewKey(t *testing.T) {
+	pri, pub, err := client.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(pri))
+	fmt.Println(string(pub))
+}
+
+func TestFabricCAClient_EnrollByKey(t *testing.T) {
+	/*pri, _, err := client.NewKey()
+	checkErr(t, err)*/
+	pri := []byte(`-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgc11Utvqv9UlT8MSN
+/UIS5amvpqIA+gTBib4Z0+/DThyhRANCAAQakkETGas3qLAUjCQH4IzILXzeYECA
+kF5euyxOHGJjxPyYXRm+5LPMzKI/vEOcE3xDQhlv9OPNG7sMT9Tfn96U
+-----END PRIVATE KEY-----`)
+	enrollReq := CaEnrollmentRequest{
+		EnrollmentId: "test2",
+		Secret:       "test2",
+	}
+	id, err := client.EnrollByKey(enrollReq, pri)
+	checkErr(t, err)
+	//privKey, ok := idn.PrivateKey.(*ecdsa.PrivateKey)
+	cert, privKey, pubKey, err := id.GetStoreData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("--------- cert -------- \n", string(cert))
+	fmt.Println("--------- privateKey -------- \n", string(privKey))
+	fmt.Println("--------- publicKey -------- \n", string(pubKey))
 }

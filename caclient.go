@@ -47,6 +47,23 @@ func NewCaClientFromConfig(config CAConfig, transport *http.Transport) (*FabricC
 	}, nil
 }
 
+// 生成一对公私钥
+func (f *FabricCAClient) NewKey() (privateKey, publicKey []byte, err error) {
+	key, err := f.Crypto.NewKey()
+	if err != nil {
+		return
+	}
+	privateKey, err = key.GetPemPrivateKey()
+	if err != nil {
+		return
+	}
+	publicKey, err = key.GetPemPublicKey()
+	if err != nil {
+		return
+	}
+	return
+}
+
 // GetCaCertificateChain gets root and intermediate certificates used by FabricCA server.
 // This certificates must be presented to Fabric entities (peers, orderers) as MSP so they can verify that request
 // are from valid entities.
@@ -63,7 +80,7 @@ func (f *FabricCAClient) GetCaInfo() (*CAGetCertResponse, error) {
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpClient := &http.Client{Transport:f.getTransport()}
+	httpClient := &http.Client{Transport: f.getTransport()}
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -161,7 +178,86 @@ func (f *FabricCAClient) Enroll(request CaEnrollmentRequest) (*Identity, error) 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(request.EnrollmentId, request.Secret)
-	httpClient := &http.Client{Transport:f.getTransport()}
+	httpClient := &http.Client{Transport: f.getTransport()}
+	resp, err := httpClient.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		enrResp := new(enrollmentResponse)
+		if err := json.Unmarshal(body, enrResp); err != nil {
+			return nil, err
+		}
+		if !enrResp.Success {
+			return nil, concatErrors(enrResp.Errors)
+		}
+
+		cabyte, err := base64.StdEncoding.DecodeString(enrResp.Result.ServerInfo.CAChain)
+		if err != nil {
+			return nil, err
+		}
+		cablock, _ := pem.Decode(cabyte)
+		cacert, err := x509.ParseCertificate(cablock.Bytes)
+		f.ServerInfo.CAName = enrResp.Result.ServerInfo.CAName
+		f.ServerInfo.CACert = cacert
+
+		rawCert, err := base64.StdEncoding.DecodeString(enrResp.Result.Cert)
+		if err != nil {
+			return nil, err
+		}
+		a, _ := pem.Decode(rawCert)
+		cert, err := x509.ParseCertificate(a.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		return &Identity{Certificate: cert, PrivateKey: key, MspId: f.MspId}, nil
+	}
+	return nil, fmt.Errorf("non 200 response: %v message is: %s", resp.StatusCode, string(body))
+}
+
+// 根据私钥申请证书
+func (f *FabricCAClient) EnrollByKey(request CaEnrollmentRequest, pemPrivateKey []byte) (*Identity, error) {
+	key, err := ParsePemKey(pemPrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	var hosts []string
+	if len(request.Hosts) == 0 {
+		parsedUrl, err := url.Parse(f.Url)
+		if err != nil {
+			return nil, err
+		}
+		hosts = []string{parsedUrl.Host}
+	} else {
+		hosts = request.Hosts
+	}
+	if request.CAName == "" {
+		request.CAName = f.ServerInfo.CAName
+	}
+	// 构建证书请求csr
+	csr, err := f.Crypto.CreateCertificateRequest(request.EnrollmentId, key, hosts)
+	if err != nil {
+		return nil, err
+	}
+	crm, err := json.Marshal(certificateRequest{CR: string(csr), CaEnrollmentRequest: request})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/enroll", f.Url), bytes.NewBuffer(crm))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(request.EnrollmentId, request.Secret)
+	httpClient := &http.Client{Transport: f.getTransport()}
 	resp, err := httpClient.Do(req)
 
 	if err != nil {
@@ -423,8 +519,6 @@ func (f *FabricCAClient) GetIdentities(identity *Identity, caName string) (*CALi
 		return nil, err
 	}
 	httpReq.Header.Set("authorization", token)
-
-
 
 	httpClient := &http.Client{Transport: f.getTransport()}
 	resp, err := httpClient.Do(httpReq)

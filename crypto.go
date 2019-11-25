@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"fmt"
 	"golang.org/x/crypto/sha3"
 	"hash"
 	"math/big"
@@ -29,6 +30,12 @@ type CryptoSuite interface {
 	Sign(msg []byte, k interface{}) ([]byte, error)
 	// Hash computes Hash value of provided data. Hash function will be different in different crypto implementations.
 	Hash(data []byte) []byte
+	// new key to byte
+	NewKey() (CryptoSuite, error)
+	// get privateKey byte
+	GetPemPrivateKey() ([]byte, error)
+	// get publicKey byte
+	GetPemPublicKey() ([]byte, error)
 }
 
 var (
@@ -52,17 +59,49 @@ type eCDSASignature struct {
 	R, S *big.Int
 }
 
-func (c *ECCryptSuite) GenerateKey() (interface{}, error) {
+func (c *ECCryptSuite) NewKey() (CryptoSuite, error) {
+	if c.key != nil {
+		return c, nil
+	}
 	key, err := ecdsa.GenerateKey(c.curve, rand.Reader)
 	if err != nil {
 		return nil, err
 	}
-	c.key = key
-
-	return key, nil
+	res := &ECCryptSuite{
+		curve:        c.curve,
+		sigAlgorithm: c.sigAlgorithm,
+		key:          key,
+		hashFunction: c.hashFunction,
+	}
+	return res, nil
 }
 
-func (c *ECCryptSuite) GetKey() (*ecdsa.PrivateKey, error) {
+func (c *ECCryptSuite) GetPemPrivateKey() ([]byte, error) {
+	if c.key == nil {
+		return nil, fmt.Errorf("PrivateKey not found")
+	}
+	raw, err := x509.MarshalPKCS8PrivateKey(c.key)
+	if err != nil {
+		return nil, fmt.Errorf("Failed marshalling Privatekey [%s]", err)
+	}
+	b := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: raw})
+	return b, nil
+}
+
+func (c *ECCryptSuite) GetPemPublicKey() ([]byte, error) {
+	if c.key == nil {
+		return nil, fmt.Errorf("PrivateKey not found")
+	}
+
+	raw, err := x509.MarshalPKIXPublicKey(c.key.Public())
+	if err != nil {
+		return nil, fmt.Errorf("Failed marshalling PublicKey [%s]", err)
+	}
+	b := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: raw})
+	return b, nil
+}
+
+func (c *ECCryptSuite) GenerateKey() (interface{}, error) {
 	key, err := ecdsa.GenerateKey(c.curve, rand.Reader)
 	if err != nil {
 		return nil, err
@@ -138,36 +177,6 @@ func (c *ECCryptSuite) Sign(msg []byte, k interface{}) ([]byte, error) {
 	return sig, nil
 }
 
-
-func (c *ECCryptSuite) Sign2(msg []byte, k interface{}) ([]byte, error) {
-	key, ok := k.(*ecdsa.PrivateKey)
-	if !ok {
-		return nil, ErrInvalidKeyType
-	}
-	var h []byte
-	h = c.Hash(msg)
-	R, S, err := ecdsa.Sign(rand.Reader, key, h)
-	if err != nil {
-		return nil, err
-	}
-	c.preventMalleability(key, S)
-	sig, err := asn1.Marshal(eCDSASignature{R, S})
-	if err != nil {
-		return nil, err
-	}
-	return sig, nil
-}
-
-// ECDSA signature can be "exploited" using symmetry of S values.
-// Fabric (by convention) accepts only signatures with lowS values
-// If result of a signature is high-S value we have to subtract S from curve.N
-// For more details https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki
-func (c *ECCryptSuite) preventMalleability(k *ecdsa.PrivateKey, S *big.Int) {
-	halfOrder := ecCurveHalfOrders[k.Curve]
-	if S.Cmp(halfOrder) == 1 {
-		S.Sub(k.Params().N, S)
-	}
-}
 func (c *ECCryptSuite) Hash(data []byte) []byte {
 	h := c.hashFunction()
 	h.Write(data)
