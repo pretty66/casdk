@@ -277,19 +277,17 @@ func (i *Identity) setPemPrivateKey(privateKey []byte) {
 }
 
 
-var adminIdn *Identity
+
 func InitAdminIdentity(cert, privateKey []byte) (*Identity, error) {
-	if adminIdn == nil {
-		var err error
-		adminIdn = &Identity{}
-		adminIdn.PrivateKey, err = ParsePemKey(privateKey)
-		if err != nil {
-			return nil, err
-		}
-		adminIdn.Certificate, err = ParsePemCert(cert)
-		if err != nil {
-			return nil, err
-		}
+	var err error
+	adminIdn := &Identity{}
+	adminIdn.PrivateKey, err = ParsePemKey(privateKey)
+	if err != nil {
+		return nil, err
+	}
+	adminIdn.Certificate, err = ParsePemCert(cert)
+	if err != nil {
+		return nil, err
 	}
 	return adminIdn, nil
 }

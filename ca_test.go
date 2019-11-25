@@ -75,9 +75,9 @@ func TestFabricCAClient_Enroll(t *testing.T) {
 func TestFabricCAClient_Register(t *testing.T) {
 	idn := initIdentity()
 	req := CARegistrationRequest{
-		EnrolmentId:    "ca4",
-		Type:           "user",
-		Secret:         "ca4",
+		EnrolmentId:    "ca5",
+		Type:           "tls",
+		Secret:         "ca5",
 		MaxEnrollments: -1,
 		Attrs:          nil,
 		CAName:         client.ServerInfo.CAName,
