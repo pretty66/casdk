@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -392,15 +395,6 @@ func (f *FabricCAClient) getTransport() *http.Transport {
 	return tr
 }
 
-var DefaultCipherSuites = []uint16{
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-}
-
 // Revoke revokes ECert in fabric-ca server.
 // Note that this request will revoke certificate ONLY in FabricCa server. Peers (for now) do not know
 // about this certificate revocation.
@@ -421,6 +415,9 @@ func (f *FabricCAClient) Revoke(identity *Identity, request *CARevocationRequest
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(httpReq.URL.String())
+	fmt.Println(token)
+	fmt.Println(string(reqJson))
 	httpReq.Header.Set("authorization", token)
 
 	httpClient := &http.Client{Transport: f.getTransport()}
@@ -553,4 +550,70 @@ func concatErrors(errs []caResponseErr) error {
 		errors += e.Message + ":"
 	}
 	return fmt.Errorf(errors)
+}
+
+// 获取证书吊销列表
+func (f *FabricCAClient) Gencrl(identity *Identity) (out *pkix.CertificateList, err error) {
+	if identity == nil {
+		return nil, ErrCertificateEmpty
+	}
+	reqBody := map[string]string{
+		"caname": f.ServerInfo.CAName,
+	}
+	reqJson, err := json.Marshal(reqBody)
+	if err != nil {
+		return
+	}
+
+	httpReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/gencrl", f.Url), bytes.NewBuffer(reqJson))
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := f.createToken(identity, reqJson, httpReq.Method, httpReq.URL.RequestURI())
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("authorization", token)
+
+	httpClient := &http.Client{Transport: f.getTransport()}
+
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		result := new(crlResponse)
+		if err := json.Unmarshal(body, result); err != nil {
+			return nil, err
+		}
+		if !result.Success {
+			return nil, err
+		}
+		crls, err := base64.StdEncoding.DecodeString(result.Result.CRL)
+		if err != nil {
+			return nil, err
+		}
+		out, err = x509.ParseCRL(crls)
+		return out, err
+	}
+	return nil, errors.New("unknow error")
+}
+
+/**
+ * 获取证书的 serial、aki
+ */
+func (f *FabricCAClient) GetCertSerialAki(pemCert []byte) (string, string, error) {
+	cert, err := ParsePemCert(pemCert)
+	if err != nil {
+		return "", "", err
+	}
+
+	return fmt.Sprintf("%x", cert.SerialNumber), hex.EncodeToString(cert.AuthorityKeyId), nil
 }

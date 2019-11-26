@@ -255,3 +255,10 @@ type caListAllIdentities struct {
 	caResponse
 	Result CAListAllIdentitesResponse `json:"result"`
 }
+
+type crlResponse struct {
+	caResponse
+	Result struct {
+		CRL string `json:"CRL"`
+	} `json:"result"`
+}
