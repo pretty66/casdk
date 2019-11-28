@@ -415,9 +415,6 @@ func (f *FabricCAClient) Revoke(identity *Identity, request *CARevocationRequest
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(httpReq.URL.String())
-	fmt.Println(token)
-	fmt.Println(string(reqJson))
 	httpReq.Header.Set("authorization", token)
 
 	httpClient := &http.Client{Transport: f.getTransport()}

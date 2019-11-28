@@ -63,9 +63,9 @@ type eCDSASignature struct {
 }
 
 func (c *ECCryptSuite) NewKey() (CryptoSuite, error) {
-	if c.key != nil {
+	/*if c.key != nil {
 		return c, nil
-	}
+	}*/
 	key, err := ecdsa.GenerateKey(c.curve, rand.Reader)
 	if err != nil {
 		return nil, err
