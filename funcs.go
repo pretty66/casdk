@@ -57,7 +57,7 @@ func CertToPem(cert *x509.Certificate) []byte {
 
 func ParsePemCert(cert []byte) (*x509.Certificate, error) {
 	p, _ := pem.Decode(cert)
-	if p.Bytes == nil || len(p.Bytes) == 0 {
+	if p == nil || len(p.Bytes) == 0 {
 		return nil, errors.New("cert parse error")
 	}
 	return x509.ParseCertificate(p.Bytes)
@@ -65,7 +65,7 @@ func ParsePemCert(cert []byte) (*x509.Certificate, error) {
 
 func ParsePemKey(key []byte) (*ecdsa.PrivateKey, error) {
 	p, _ := pem.Decode(key)
-	if p.Bytes == nil || len(p.Bytes) == 0 {
+	if p == nil || len(p.Bytes) == 0 {
 		return nil, errors.New("key parse error")
 	}
 	privateKey, err := DERToPrivateKey(p.Bytes)
