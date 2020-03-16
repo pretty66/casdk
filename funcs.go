@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -54,13 +55,19 @@ func CertToPem(cert *x509.Certificate) []byte {
 	return pem.EncodeToMemory(block)
 }
 
-func ParsePemCert (cert []byte) (*x509.Certificate, error) {
+func ParsePemCert(cert []byte) (*x509.Certificate, error) {
 	p, _ := pem.Decode(cert)
+	if p.Bytes == nil || len(p.Bytes) == 0 {
+		return nil, errors.New("cert parse error")
+	}
 	return x509.ParseCertificate(p.Bytes)
 }
 
 func ParsePemKey(key []byte) (*ecdsa.PrivateKey, error) {
 	p, _ := pem.Decode(key)
+	if p.Bytes == nil || len(p.Bytes) == 0 {
+		return nil, errors.New("key parse error")
+	}
 	privateKey, err := DERToPrivateKey(p.Bytes)
 	if err != nil {
 		return nil, err
@@ -91,4 +98,38 @@ func DERToPrivateKey(der []byte) (key interface{}, err error) {
 	}
 
 	return nil, errors.New("Invalid key type. The DER must contain an rsa.PrivateKey or ecdsa.PrivateKey")
+}
+
+func GetCertSerialNumber(pemCert []byte) (string, string, error) {
+	cert, err := ParsePemCert(pemCert)
+	if err != nil {
+		return "", "", err
+	}
+
+	return fmt.Sprintf("%x", cert.SerialNumber), hex.EncodeToString(cert.AuthorityKeyId), nil
+}
+
+func GetPemPrivateKey(key interface{}) ([]byte, error) {
+	if key == nil {
+		return nil, fmt.Errorf("PrivateKey not found")
+	}
+	raw, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("Failed marshalling Privatekey [%s]", err)
+	}
+	b := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: raw})
+	return b, nil
+}
+
+func GetPemPublicKey(key interface{}) ([]byte, error) {
+	if key == nil {
+		return nil, fmt.Errorf("PublicKey not found")
+	}
+	// privateKey.Public()
+	raw, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("Failed marshalling PublicKey [%s]", err)
+	}
+	b := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: raw})
+	return b, nil
 }

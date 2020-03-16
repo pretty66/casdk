@@ -5,7 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
+	"time"
 )
 
 var client *FabricCAClient
@@ -78,7 +81,7 @@ func TestFabricCAClient_Enroll(t *testing.T) {
 func TestFabricCAClient_Register(t *testing.T) {
 	idn := initIdentity()
 	req := CARegistrationRequest{
-		EnrolmentId:    "caa1",
+		EnrolmentId:    "caa122",
 		Type:           "user",
 		Secret:         "caa1",
 		MaxEnrollments: -1,
@@ -94,11 +97,11 @@ func TestFabricCAClient_Register(t *testing.T) {
 
 func TestFabricCAClient_GetIdentity(t *testing.T) {
 	idn := initIdentity()
-	res, err := client.GetIdentity(idn, "test2", "")
+	res, err := client.GetIdentity(idn, "test_201", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(res)
+	fmt.Printf("%#v", res)
 }
 
 var caa12 = `-----BEGIN CERTIFICATE-----
@@ -403,4 +406,42 @@ AgNHADBEAiAnhoXkIJACZaH837BTlh0f3Oi8dx8M1OKR4ftI40MJZwIgdxqsDWYQ
 	fmt.Println(cert.SerialNumber.String())
 	fmt.Printf("%x", cert.SerialNumber)
 	//fmt.Println(cert.SerialNumber)
+}
+
+func TestECCryptSuite_CreateCertificateRequest(t *testing.T) {
+	pri := []byte(`-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgc11Utvqv9UlT8MSN
+/UIS5amvpqIA+gTBib4Z0+/DThyhRANCAAQakkETGas3qLAUjCQH4IzILXzeYECA
+kF5euyxOHGJjxPyYXRm+5LPMzKI/vEOcE3xDQhlv9OPNG7sMT9Tfn96U
+-----END PRIVATE KEY-----`)
+	prikey, err := ParsePemKey(pri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := client.Crypto.CreateCertificateRequest("test", prikey, []string{"192.168.31.122"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(res))
+}
+
+func writeData(prefix string, data []byte) {
+	path := "./tmp/" + prefix
+	is, err := IsPathExists(path)
+
+	if err != nil || !is {
+		err = os.Mkdir(path, 0777)
+		if err != nil {
+			panic(err)
+		}
+	}
+	fileName := path + "/" + time.Now().Format("2006-01-02_15:04:05") + ".pem"
+	err = ioutil.WriteFile(fileName, data, 0666)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func Test_writeData(t *testing.T) {
+	writeData("aaa", []byte("awqeqweqw"))
 }
