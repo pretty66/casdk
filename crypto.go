@@ -26,7 +26,7 @@ type CryptoSuite interface {
 	// GenerateKey returns PrivateKey.
 	GenerateKey() (interface{}, error)
 	// CreateCertificateRequest will create CSR request. It takes enrolmentId and Private key
-	CreateCertificateRequest(enrollmentId string, key interface{}, hosts []string) ([]byte, error)
+	CreateCertificateRequest(request CaEnrollmentRequest, regAttr map[string]string, key interface{}, hosts []string) ([]byte, error)
 	// Sign signs message. It takes message to sign and Private key
 	Sign(msg []byte, k interface{}) ([]byte, error)
 	// Hash computes Hash value of provided data. Hash function will be different in different crypto implementations.
@@ -114,13 +114,37 @@ func (c *ECCryptSuite) GenerateKey() (interface{}, error) {
 	return key, nil
 }
 
-func (c *ECCryptSuite) CreateCertificateRequest(enrollmentId string, key interface{}, hosts []string) ([]byte, error) {
-	if enrollmentId == "" {
+func (c *ECCryptSuite) CreateCertificateRequest(request CaEnrollmentRequest, regAttr map[string]string, key interface{}, hosts []string) ([]byte, error) {
+	if request.EnrollmentId == "" {
 		return nil, ErrEnrollmentIdMissing
 	}
-	subj := pkix.Name{
-		CommonName: enrollmentId,
+
+	var subj pkix.Name
+	//如果profile=“ca” 则表明该CSR请求为一个ICA请求（RCA请求不走这个方法）
+	//也就是说，目前普通证书只设置subjectId，且type为user
+	//ICA证书type为auditor，且可以设置如下的额外信息
+	if request.Profile == "" {
+		subj = pkix.Name{
+			CommonName: request.EnrollmentId,
+		}
+	} else {
+		var country []string
+		country = append(country, regAttr["country"])
+		var organization []string
+		organization = append(organization, regAttr["organization"])
+		var province []string
+		province = append(province, regAttr["province"])
+		var locality []string
+		locality = append(locality, regAttr["locality"])
+		subj = pkix.Name{
+			CommonName:   request.EnrollmentId,
+			Country:      country,
+			Organization: organization,
+			Province:     province,
+			Locality:     locality,
+		}
 	}
+
 	rawSubj := subj.ToRDNSequence()
 
 	asn1Subj, err := asn1.Marshal(rawSubj)
