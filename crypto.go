@@ -120,6 +120,7 @@ func (c *ECCryptSuite) CreateCertificateRequest(request CaEnrollmentRequest, reg
 	}
 	fmt.Println("test")
 	fmt.Println("test")
+	fmt.Println("test")
 	var subj pkix.Name
 	//如果profile=“ca” 则表明该CSR请求为一个ICA请求（RCA请求不走这个方法）
 	//也就是说，目前普通证书只设置subjectId，且type为user
