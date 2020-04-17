@@ -166,7 +166,7 @@ func (f *FabricCAClient) Enroll(request CaEnrollmentRequest) (*Identity, error) 
 		request.CAName = f.ServerInfo.CAName
 	}
 	// 构建证书请求csr
-	csr, err := f.Crypto.CreateCertificateRequest(request, nil, key, hosts)
+	csr, err := f.Crypto.CreateCertificateRequest(request, nil, nil, key, hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (f *FabricCAClient) Enroll(request CaEnrollmentRequest) (*Identity, error) 
 }
 
 // 根据私钥申请证书
-func (f *FabricCAClient) EnrollByKey(request CaEnrollmentRequest, pemPrivateKey []byte, regAttr map[string]string) (*Identity, error) {
+func (f *FabricCAClient) EnrollByKey(request CaEnrollmentRequest, pemPrivateKey []byte, regAttr map[string]string, standardAttrList map[string]string) (*Identity, error) {
 	key, err := ParsePemKey(pemPrivateKey)
 	if err != nil {
 		return nil, err
@@ -245,7 +245,7 @@ func (f *FabricCAClient) EnrollByKey(request CaEnrollmentRequest, pemPrivateKey 
 		request.CAName = f.ServerInfo.CAName
 	}
 	// 构建证书请求csr
-	csr, err := f.Crypto.CreateCertificateRequest(request, regAttr, key, hosts)
+	csr, err := f.Crypto.CreateCertificateRequest(request, regAttr, standardAttrList, key, hosts)
 	if err != nil {
 		return nil, err
 	}
